@@ -2,12 +2,12 @@
 # -*-coding:utf-8-*-
 #pylint: disable = C0103
 '''
-Copyright 2019 @3book. .
+Copyright 2019 @3book.
 Format Scanned-pdf/image file to printable booklet.
 Only image in pdf will be output.so Scanned document is most suitable.
 '''
-__author__ =  '3book'
-__version__=  '0.0.1'
+__author__ = '3book'
+__version__ = '0.0.1'
 
 import os
 import argparse
@@ -90,7 +90,8 @@ def openIms(inputFilePath):
         ims = list(map(Image.open, fileList))
     except TypeError as ImageFileNotSupported:
         raise ImageFileNotSupported
-    ims = [pngConvert(im) for im in ims if 'transparency' in ims[0].info]
+    if 'transparency' in ims[0].info:
+        ims = [pngConvert(im) for im in ims]
     return ims
 
 
@@ -118,7 +119,7 @@ def imVcut(im):
     return imLeftPart, imRrightPart
 
 
-def insertBlankpage(ims):
+def insertBlankpage(ims, frontInsertPages=None):
     '''
     Insert blank image.
 
@@ -127,9 +128,14 @@ def insertBlankpage(ims):
     :exception :None
     '''
     length = len(ims)
-    index = int(length / 4)
-    imsBlank = [Image.new('RGB', ims[0].size, (255, 255, 255))] * (length % 4)
-    imList = ims[:index] + imsBlank + ims[index:]
+    index = int(length / 4)*2
+    imsBlank = [Image.new('RGB', ims[0].size, (255, 255, 255))] * (-length % 4)
+    if frontInsertPages == None:
+        imList = ims[:index] + imsBlank + ims[index:]
+    else:
+        imsBlankFront = imsBlank[:frontInsertPages]
+        imsBlankback = imsBlank[frontInsertPages:]
+        imList = ims[0:1] + imsBlankFront + ims[1:-1] + imsBlankback + ims[-1:]
     return imList
 
 
@@ -204,7 +210,7 @@ def imgBookLet(ims, bookLetSize, outputFileName):
     #first fold for paper A5/A6
     if bookLetSize in ['A5', 'A6', 'A7']:
         imList = []
-        ims = insertBlankpage(ims)
+        ims = insertBlankpage(ims,0)
         for i in range(int(len(ims) / 2)):
             if i % 2 == 0:
                 im = imMerge(2, ims.pop(0), ims.pop())
@@ -276,7 +282,8 @@ def main():
     bookLetSize = args.bookSize
     needVcut = args.verticalCutting
     needPageNumber = args.pageNumber
-    outputFilePath = os.path.splitext(inputFilePath)[0] + '_booklet_' + bookLetSize + '.pdf'
+    outputFilePath = os.path.splitext(
+        inputFilePath)[0] + '_booklet_' + bookLetSize + '.pdf'
 
     # try:
     if os.path.isfile(inputFilePath) and os.path.splitext(
@@ -291,6 +298,7 @@ def main():
     # except Exception:
     # print(Exception)
     imgBookLet(imgs, bookLetSize, outputFilePath)
+
 
 if __name__ == '__main__':
     main()
