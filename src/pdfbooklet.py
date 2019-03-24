@@ -14,13 +14,52 @@ import copy
 import logging
 import math
 # from time import time
+
 from PyPDF2.pdf import PdfFileReader, PdfFileWriter, PageObject
+from pdfrw import PdfReader, PdfWriter, PageMerge, IndirectPdfDict
 from common import strObj
 from common import listObj
 from common import setLog
 
 pageLayoutDict = {'A5': (2, 1, 2), 'A6': (2, 2, 2), 'A7': (2, 2, 4)}
-printSizeDict = {'A4': (595, 842), 'A5': (421, 595), 'A6': (297, 421)}
+printSizeDict = {
+    'A4': (595, 842),
+    'A5': (421, 595),
+    'A6': (297, 421),
+    'A7': (210, 297)
+}
+
+# class booklet(object):
+# def __init__(
+#         self,
+#         pages,
+#         bookletsize,
+# ):
+#     self.w,self.h= printSizeDict(bookletsize)
+#     self.layout = pageLayoutDict(bookletsize)
+# def generator(self):
+#     xn, yn = pageLayout[2], pageLayout[1]
+#     pageIndex = bookletIndexGen(numPages)
+#     pageA = PageMerge()
+#     pageB = PageMerge()
+#     n = 0
+#     opages = []
+#     for index in pageIndex:
+#         x = n % xn
+#         y = int(n / xn) % yn
+#         A, B = index
+#         lastPage = 0 if 2 * n < numPages else 1
+#         pageA.add(pages[A], viewrect=(x * w, y * h, w, h))
+#         pageB.add(pages[B], viewrect=(x * w, y * h, w, h))
+#         # pageA[-1].scale(w,h)
+#         n += 1
+#         if n % (xn * yn) == 0 or lastPage:
+#             opages.append(pageA.render())
+#             opages.append(pageB.render())
+#             logging.info('write page. snkPageNum=%s', math.ceil(n / (xn * yn)))
+#             pageA = PageMerge()
+#             pageB = PageMerge()
+#     PdfWriter(outputFile).addpages(opages).write()
 
 
 def bookletIndexGen(pageNum):
@@ -68,10 +107,10 @@ class pdfpage(object):
         # PageObject.__init__(self)
         self.pageObj = pageObj
         self.landscape = landscape
-        self.w = pageObj.mediaBox.getUpperRight_x(
-        ) - pageObj.mediaBox.getLowerLeft_x()
-        self.h = pageObj.mediaBox.getUpperRight_y(
-        ) - pageObj.mediaBox.getLowerLeft_y()
+        self.w = pageObj.trimBox.getUpperRight_x(
+        ) - pageObj.trimBox.getLowerLeft_x()
+        self.h = pageObj.trimBox.getUpperRight_y(
+        ) - pageObj.trimBox.getLowerLeft_y()
         if pageSize:
             if landscape:
                 self.w = max(pageSize)
@@ -90,15 +129,15 @@ class pdfpage(object):
         rightHalfPage = copy.copy(pageObj)
         x0, y0, x1, y1 = leftHalfPage.mediaBox
         lbox = (x0, y0, x0 + (x1 - x0) / 2, y1)
-        for box in (leftHalfPage.artBox, leftHalfPage.bleedBox,
-                    leftHalfPage.cropBox, leftHalfPage.mediaBox,
+        for box in (leftHalfPage.bleedBox, leftHalfPage.cropBox,
+                    leftHalfPage.artBox, leftHalfPage.mediaBox,
                     leftHalfPage.trimBox):
             box.lowerLeft = lbox[:2]
             box.upperRight = lbox[2:]
         x0, y0, x1, y1 = rightHalfPage.mediaBox
         rbox = (x0 + (x1 - x0) / 2, y0, x1, y1)
-        for box in (rightHalfPage.artBox, rightHalfPage.bleedBox,
-                    rightHalfPage.cropBox, rightHalfPage.mediaBox,
+        for box in (rightHalfPage.bleedBox, rightHalfPage.cropBox,
+                    rightHalfPage.artBox, rightHalfPage.mediaBox,
                     rightHalfPage.trimBox):
             box.lowerLeft = rbox[:2]
             box.upperRight = rbox[2:]
@@ -116,6 +155,7 @@ class pdfpage(object):
         ctm = [sx, 0, 0, sy, tx, ty]
         return ctm
 
+
 def pdfBookLet(inputFile, outputFile, bookletSize):
     '''
     Make a printable PDF booklet.
@@ -127,55 +167,116 @@ def pdfBookLet(inputFile, outputFile, bookletSize):
     :exception :None
     '''
     logging.info('start. args=%s', (inputFile, bookletSize))
+
     with open(outputFile, 'wb') as file:
         pass
+
     with open(inputFile, 'rb') as pdfFileObj:
-        pdfReader = PdfFileReader(pdfFileObj, strict=True)
-        pageNum = pdfReader.getNumPages()
-        pdfWrite = PdfFileWriter()
-        pageIndex = bookletIndexGen(pageNum)
-        pageLayout = pageLayoutDict[bookletSize]
-        w, h = printSizeDict[bookletSize]
-        ww = w * pageLayout[2]
-        hh = h * pageLayout[1]
-        pageBlank = PageObject.createBlankPage(width=w, height=h)
-        pageA = PageObject.createBlankPage(width=ww, height=hh)
-        pageB = PageObject.createBlankPage(width=ww, height=hh)
-        xn, yn = pageLayout[2], pageLayout[1]
-        logging.info('Booklet information. srcNumPages=%5s snkPageLayout=%10s', pageNum,pageLayout)
-        n = 0
-        for index in pageIndex:
-            x = n % xn
-            y = int(n / xn) % yn
-            A, B = index
-            lastPage = 0 if 2 * n < pageNum else 1
-            pageObjA = pdfReader.getPage(A) if A is not None else pageBlank
-            # pageObjA.mediaBox.lowerLeft=(31,596)
-            # pageObjA.mediaBox.upperRight=(581,197)
-            pdfpageObjA = pdfpage(
-                pageObjA, landscape=False, pageSize=printSizeDict[bookletSize])
-            ctm = pdfpageObjA.mergeCalc(xn=xn, yn=yn, x=x, y=y)
-            pageA.mergeTransformedPage(pdfpageObjA.pageObj, ctm, expand=False)
-            #write back page
-            pageObjB = pdfReader.getPage(B) if B is not None else pageBlank
-            pdfpageObjB = pdfpage(
-                pageObjB, landscape=False, pageSize=printSizeDict[bookletSize])
-            ctm = pdfpageObjB.mergeCalc(xn=xn, yn=yn, x=x, y=y)
-            pageB.mergeTransformedPage(pdfpageObjB.pageObj, ctm, expand=False)
-            n += 1
-            logging.info('Front merge. srcPageNum=%-4sLocation=%s', A,(x,y))
-            logging.info('Back merge.  srcPageNum=%-4sLocation=%s', B,(x,y))
-            if n % (xn * yn) == 0 or lastPage:
-                pageA.compressContentStreams()
-                pageB.compressContentStreams()
-                pdfWrite.addPage(pageA)
-                pdfWrite.addPage(pageB)
-                with open(outputFile, 'ab') as file:
-                    pdfWrite.write(file)
-                    logging.info('write page. snkPageNum=%s', math.ceil(n/(xn*yn)))
-                pageA = PageObject.createBlankPage(width=ww, height=hh)
-                pageB = PageObject.createBlankPage(width=ww, height=hh)
-    logging.info('End. output=%s', outputFile)
+        pdfRead = PdfReader(pdfFileObj)
+        pages = pdfRead.pages
+        numPages = pdfRead.numPages
+    pageLayout = pageLayoutDict[bookletSize]
+    w, h = printSizeDict[bookletSize]
+    xn, yn = pageLayout[2], pageLayout[1]
+    pageIndex = bookletIndexGen(numPages)
+    frontPage = PageMerge()
+    frontPageRow = PageMerge()
+    backPage = PageMerge()
+    n = 0
+    outPages = []
+    A,B=0,1
+    for index in pageIndex:
+        x = n % xn
+        y = int(n / xn) % yn
+        # A, B = index
+        lastPage = 0 if 2 * n < numPages else 1
+        frontPageRow.add(pages[A])
+        # frontPage.add(pages[A], prepend=True)
+        backPage.add(pages[B])
+        #page scale
+        frontPageRow[-1].scale(w / frontPageRow[-1].w, h / frontPageRow[-1].h)
+        backPage[-1].scale(w / backPage[-1].w, h / backPage[-1].h)
+        #page layout
+        # if n%xn==0:
+        #     pageA.reverse()
+        for page in frontPageRow[:-1]:
+            page.x += frontPageRow[-1].w
+        # pageA[-1].x= x*pageA[0].w
+        frontPageRow[-1].y = y * frontPageRow[0].h
+        backPage[-1].x = x * backPage[0].w
+        backPage[-1].y = y * backPage[0].h
+        A = -(A+1) if A>=0 else -(A-1)
+        B = -(B+1) if B>=0 else -(B-1)
+        n += 1
+        if n % xn == 0 or lastPage:
+            frontPage += frontPageRow
+            frontPageRow = PageMerge()
+        if n % (xn*yn) == 0 or lastPage:
+            outPages.append(frontPage.render())
+            outPages.append(backPage.render())
+            PdfWriter(outputFile).addpages(outPages).write()
+            logging.info('write page. snkPageNum=%s', math.ceil(n / (xn * yn)))
+            frontPage = PageMerge()
+            backPage = PageMerge()
+    PdfWriter(outputFile).addpages(outPages).write()
+
+    # with open(inputFile, 'rb') as pdfFileObj:
+    #     pdfReader = PdfFileReader(pdfFileObj, strict=True)
+    #     pageNum = pdfReader.getNumPages()
+    #     pdfWrite = PdfFileWriter()
+    #     pageIndex = bookletIndexGen(pageNum)
+    #     pageLayout = pageLayoutDict[bookletSize]
+    #     w, h = printSizeDict[bookletSize]
+    #     ww = w * pageLayout[2]
+    #     hh = h * pageLayout[1]
+    #     pageBlank = PageObject.createBlankPage(width=w, height=h)
+    #     pageA = PageObject.createBlankPage(width=ww, height=hh)
+    #     pageB = PageObject.createBlankPage(width=ww, height=hh)
+    #     xn, yn = pageLayout[2], pageLayout[1]
+    #     logging.info('Booklet information. srcNumPages=%5s snkPageLayout=%10s',
+    #                  pageNum, pageLayout)
+    #     n = 0
+    #     for index in pageIndex:
+    #         x = n % xn
+    #         y = int(n / xn) % yn
+    #         A, B = index
+    #         lastPage = 0 if 2 * n < pageNum else 1
+    #         pageObjA = pdfReader.getPage(A) if A is not None else pageBlank
+    #         pdfpageObjA = pdfpage(
+    #             pageObjA, landscape=False, pageSize=printSizeDict[bookletSize])
+    #         ctm = pdfpageObjA.mergeCalc(xn=xn, yn=yn, x=x, y=y)
+    #         pageA.mergeTransformedPage(pdfpageObjA.pageObj, ctm, expand=False)
+    #         # writetestpdf(pageObjA)
+    #         # writetestpdf(pdfpageObjA.pageObj)
+    #         # writetestpdf(pageA)
+    #         #write back page
+    #         pageObjB = pdfReader.getPage(B) if B is not None else pageBlank
+    #         pdfpageObjB = pdfpage(
+    #             pageObjB, landscape=False, pageSize=printSizeDict[bookletSize])
+    #         ctm = pdfpageObjB.mergeCalc(xn=xn, yn=yn, x=x, y=y)
+    #         pageB.mergeTransformedPage(pdfpageObjB.pageObj, ctm, expand=False)
+    #         n += 1
+    #         logging.info('Front merge. srcPageNum=%-4sLocation=%s', A, (x, y))
+    #         logging.info('Back merge.  srcPageNum=%-4sLocation=%s', B, (x, y))
+    #         if n % (xn * yn) == 0 or lastPage:
+    #             pageA.compressContentStreams()
+    #             pageB.compressContentStreams()
+    #             pdfWrite.addPage(pageA)
+    #             pdfWrite.addPage(pageB)
+    #             logging.info('write page. snkPageNum=%s',
+    #                          math.ceil(n / (xn * yn)))
+    #             pageA = PageObject.createBlankPage(width=ww, height=hh)
+    #             pageB = PageObject.createBlankPage(width=ww, height=hh)
+    #     with open(outputFile, 'ab') as file:
+    #         pdfWrite.write(file)
+    # logging.info('End. output=%s', outputFile)
+
+
+def writetestpdf(page):
+    pdfWrite = PdfFileWriter()
+    pdfWrite.addPage(page)
+    with open('test.pdf', 'ab') as file:
+        pdfWrite.write(file)
 
 
 def pdfOrganize(inputFile, outputFile, args):
@@ -197,9 +298,9 @@ def pdfOrganize(inputFile, outputFile, args):
             pdfWrite = PdfFileWriter()
         except IOError:
             logging.error('IOError. inputfile=%s', inputFile)
-        pageNum = listObj(range(pdfReader.numPages))
-        pageOrderIdx = pageNum.organize(args.organizePages)
-        pageCutIdx = pageNum.extract(args.vCutPage)
+        pageNumObj = listObj(range(pdfReader.numPages))
+        pageOrderIdx = pageNumObj.organize(args.organizePages)
+        pageCutIdx = pageNumObj.extract(args.vCutPage)
         pageInsertIdx = strObj.str2dict(args.insertPage)
         if pageCutIdx or pageInsertIdx:
             pageOrderIdx = pageOrderIdx if pageOrderIdx else range(
@@ -212,18 +313,19 @@ def pdfOrganize(inputFile, outputFile, args):
                     l, r = pdfpage.vsplit(pageObj)
                     pdfWrite.addPage(l)
                     pdfWrite.addPage(r)
-                    logging.info('split page %s to two halves.', i)
+                    logging.info('Page %s cut to two halves.', i)
                 else:
                     pdfWrite.addPage(pageObj)
-                    logging.info('Extract page %s.', i) 
+                    logging.info('Page %s extract .', i)
                 if pageInsertIdx:
                     key = str(i + 1)  #index=0 mean page number 1
                     if key in pageInsertIdx:
-                        logging.info('Insert %s blank page after page %s.', int(pageInsertIdx[key]), i)
+                        logging.info('Insert %s blank page after page %s.',
+                                     int(pageInsertIdx[key]), i)
                         for _ in range(int(pageInsertIdx[key])):
                             pdfWrite.addBlankPage()
-                with open(outputFile, 'ab') as file:
-                    pdfWrite.write(file)
+            with open(outputFile, 'ab') as file:
+                pdfWrite.write(file)
     logging.info('End. output=%s', outputFile)
 
 
@@ -251,19 +353,19 @@ def parseArgs():
         type=str,
         help='insert blank page. i.e 1:3,insert 3 page after index 1')
     parser.add_argument(
-        '-ro', '--organizePages', default='', help='reorganize pages.')
+        '-or', '--organizePages', default='', help='organize pages.')
     parser.add_argument(
         '-vc',
         '--vCutPage',
         default='',
         help='vertical cutting page range.i.e 1-5')
-    parser.add_argument(
-        '-pn',
-        '--insertPageNumber',
-        action='store_true',
-        help='on/off insert page number,default=off.')
+    # parser.add_argument(
+    #     '-pn',
+    #     # '--insertPageNumber',
+    #     action='store_true',
+    #     help='on/off insert page number,default=off.')
     args = parser.parse_args()
-    logging.info('End. output=%s',args)
+    logging.info('End. output=%s', args)
     return args
 
 
@@ -291,6 +393,69 @@ def main():
     logging.info('End.')
 
 
+def pdf2img(
+        pdfFile,
+        pageNum,
+):
+    '''
+    convert PDF to image
+    '''
+    # inputFile    "./example/W.pdf"
+    pagenumber = '1'
+    tmpFile = "tmp"
+    pdf2ImgGsArgs = [
+        # "ps2pdf", # actual value doesn't matter
+        # "-dNOPAUSE", "-dBATCH", "-dSAFER",
+        # "-sDEVICE=pdfwrite",
+        # "-sOutputFile=" + sys.argv[1],
+        # "-c", ".setpdfwrite",
+        # "-f",  sys.argv[2]
+        "-dSAFER",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-r300",
+        "-dTextAlphaBits=4",
+        "-dGraphicsAlphaBits=4",
+        "-sDEVICE=jpeg",
+        # "-qswitch",
+        # "-sOutputFile=" + "-",
+        # "-sstdout=%stderr"
+        "-sOutputFile=" + tmpFile + ".jpg",
+        # "-dFirstPage=" + pageNum,
+        "-dLastPage=" + pageNum,
+        pdfFile
+    ]
+    img2PdfGsArgs = [
+        "img2pdf",  # actual value doesn't matter
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-dSAFER",
+        "-sDEVICE=pdfwrite",
+        "-sOutputFile=" + tmpFile + ".jpg",
+        tmpFile + ".pdf"
+        # "-c", ".setpdfwrite",
+        # "-f",  sys.argv[2]
+    ]
+    # import sys
+    import locale
+    import ghostscript
+    encoding = locale.getpreferredencoding()
+    args = [a.encode(encoding) for a in pdf2ImgGsArgs]
+    ghostscript.Ghostscript(*args)
+    # print(sys.stdout)
+    pdfReader = PdfFileReader("./example/W.pdf", strict=False)
+    # pageObj = pdfReader.getPage(1)
+    # pageObj.readFromStream()
+    # pageObj.writeToStream()
+
+
+# from pdfrw import PdfReader, PdfWriter, PageMerge
+
+#  gswin64c.exe -dSAFER -dBATCH -dNOPAUSE -r300
+#  -dTextAlphaBits=4 -dGraphicsAlphaBits=4
+#  -sDEVICE=jpeg -sOutputFile='test%03d.jpg' .\W.pdf
+#       print (p.communicate())
 if __name__ == '__main__':
     setLog()
     main()
+# pdf2img()

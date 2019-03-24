@@ -161,7 +161,7 @@ def imModify(ims, needVcut, bookLetSize, needPageNumber):
     if needVcut:
         ims.append(ims.pop(0))
 
-    #A4 72dpi   595×842
+    #A4 72dpi   595×841
     #A4 96dpi   794×1126
     #A4 150dpi  1240×1754
     #A4 300dpi  2480×3508
