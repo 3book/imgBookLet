@@ -224,7 +224,7 @@ def parseArgs():
     parser.add_argument(
         '-ra',
         '--scanRotateAngle',
-        choices=['0', '90','180','270'],
+        choices=['0', '90', '180', '270'],
         default='',
         help='option pdf file need image extract.')
     parser.add_argument(
