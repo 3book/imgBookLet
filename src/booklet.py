@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*-coding:utf-8-*-
 #pylint: disable = C0103
 '''
@@ -228,18 +228,18 @@ def parseArgs():
         default='',
         help='option pdf file need image extract.')
     parser.add_argument(
-        '-or', '--organizePages', default='', help='organize pages.')
+        '-or', '--organizePages', default='', help='organize pages. i.e -3 4-6 8- 7')
     parser.add_argument(
         '-ip',
         '--insertPage',
         default='',
         type=str,
-        help='insert blank page. i.e 1:3,insert 3 page after index 1')
+        help='insert blank page. i.e 1:3, insert 3 pages after index 1')
     parser.add_argument(
         '-vc',
         '--vCutPage',
         default='',
-        help='vertical cutting page range.i.e 1-5')
+        help='vertical cutting page range. i.e 1-5')
     parser.add_argument(
         '-bs',
         '--bookletSize',
